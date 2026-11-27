@@ -8,6 +8,8 @@ struct FuelMateApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
+                .environment(\.calendar, Calendar(identifier: .gregorian))
                 .tint(Theme.green)
         }
     }
