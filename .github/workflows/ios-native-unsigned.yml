@@ -7,6 +7,9 @@ on:
       - 'apps/ios-native/**'
       - '.github/workflows/ios-native-unsigned.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15
@@ -43,6 +46,18 @@ jobs:
           cd "$RUNNER_TEMP"
           zip -qry FuelMate-native-unsigned.ipa Payload
           ls -lh FuelMate-native-unsigned.ipa
+
+      - name: Publish ipa to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -m1 'MARKETING_VERSION' project.yml | sed 's/.*"\(.*\)".*/\1/')
+          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' project.yml | sed 's/.*"\(.*\)".*/\1/')
+          TAG="ios-v${VER}-${BUILD}"
+          gh release create "$TAG" "$RUNNER_TEMP/FuelMate-native-unsigned.ipa" \
+            --title "iOS ${VER} (${BUILD}) unsigned ipa" \
+            --notes "自动构建产物，未签名。安装需自行重签（Sideloadly / AltStore + Apple ID，7 天有效）。" \
+            || gh release upload "$TAG" "$RUNNER_TEMP/FuelMate-native-unsigned.ipa" --clobber
 
       - uses: actions/upload-artifact@v4
         with:
