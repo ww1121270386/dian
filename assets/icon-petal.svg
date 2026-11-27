@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bgp" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F8FF"/>
+    </linearGradient>
+    <linearGradient id="pb" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#0B8A45"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bgp)"/>
+
+  <!-- 四瓣风车 -->
+  <g opacity="0.95">
+    <circle cx="385" cy="385" r="176" fill="#5B9BF8"/>
+    <circle cx="639" cy="385" r="176" fill="#9B7BF6"/>
+    <circle cx="385" cy="639" r="176" fill="#F7B84B"/>
+    <circle cx="639" cy="639" r="176" fill="#3FC97A"/>
+  </g>
+  <circle cx="512" cy="512" r="168" fill="#FFFFFF"/>
+
+  <!-- 中心闪电 -->
+  <path d="M 552 396 L 462 546 L 518 546 L 492 650 L 580 502 L 524 502 Z"
+        fill="url(#pb)" stroke="#0B8A45" stroke-width="6" stroke-linejoin="round"/>
+</svg>

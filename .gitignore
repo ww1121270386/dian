@@ -1,0 +1,54 @@
+node_modules/
+apps/ios/ios/App/Pods/
+apps/ios/ios/App/App.xcworkspace/xcuserdata/
+apps/ios/ios/App/App.xcodeproj/xcuserdata/
+apps/ios/ios/App/build/
+apps/harmony/**/build/
+apps/harmony/.hvigor/
+apps/harmony/oh_modules/
+packaging/ref/
+*.ipa
+*.hap
+local.properties
+apps/harmony-native/local.properties
+apps/harmony-native/entry/build/
+apps/harmony-native/oh_modules/
+apps/harmony-native/.hvigor/
+apps/harmony-native/signing/*.p12
+
+# 签名材料（绝不入库）
+signing/
+apps/signing/
+*.p12
+*.jks
+*.keystore
+*.cer
+*.p7b
+*.csr
+signing/release/
+
+# 构建产物
+apps/harmony-native/build/
+apps/harmony-native/entry/build/
+apps/harmony-native/dist/
+apps/android/.gradle/
+apps/android/build/
+apps/android/app/build/
+dist/
+*.apk
+*.app
+apps/harmony-native/oh_modules/
+apps/harmony-native/.hvigor/
+apps/harmony-native/local.properties
+
+# 大工具包（不入库）
+*.zip
+*.7z
+
+# 构建产物与缓存
+packaging/build/
+packaging/ref/
+apps/harmony-native/entry/.preview/
+apps/harmony-native/.preview/
+*.tgz
+.gradle/

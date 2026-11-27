@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "电耗管家 entry 模块",
+  "main": "",
+  "author": "FuelMate",
+  "license": "MIT",
+  "dependencies": {}
+}

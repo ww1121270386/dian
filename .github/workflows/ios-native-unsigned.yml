@@ -1,0 +1,51 @@
+name: Build iOS native (unsigned ipa)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apps/ios-native/**'
+      - '.github/workflows/ios-native-unsigned.yml'
+
+jobs:
+  build:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: apps/ios-native
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (no signing)
+        run: |
+          xcodebuild -project FuelMate.xcodeproj \
+            -scheme FuelMate \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package ipa
+        run: |
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/FuelMate.app"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry FuelMate-native-unsigned.ipa Payload
+          ls -lh FuelMate-native-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FuelMate-native-unsigned-ipa
+          path: ${{ runner.temp }}/FuelMate-native-unsigned.ipa
+          if-no-files-found: error

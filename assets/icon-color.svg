@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bgc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2F6FF"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#0B8A45"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bgc)"/>
+
+  <!-- 四色风车环（呼应图库的多色拼贴） -->
+  <g fill="none" stroke-width="62" stroke-linecap="round">
+    <path d="M512 232 A280 280 0 0 1 792 512" stroke="#4C8DF6"/>
+    <path d="M792 512 A280 280 0 0 1 512 792" stroke="#22C55E"/>
+    <path d="M512 792 A280 280 0 0 1 232 512" stroke="#F5A623"/>
+    <path d="M232 512 A280 280 0 0 1 512 232" stroke="#8B5CF6"/>
+  </g>
+
+  <!-- 中心闪电（实心，品牌绿） -->
+  <path d="M 566 320 L 430 546 L 512 546 L 476 704 L 606 470 L 522 470 Z"
+        fill="url(#bolt)" stroke="#0B8A45" stroke-width="6" stroke-linejoin="round"/>
+</svg>

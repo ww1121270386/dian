@@ -1,0 +1,17 @@
+{
+	"CommonInfo":{
+		"project.ide.version":"26.0.0.865",
+		"current.select.product":"default",
+		"current.select.buildMode":"",
+		"crossplatform.projectType":""
+	},
+	"BuildOptions":{
+		"SELECT_BUILD_PRODUCT":"default",
+		"BUNDLE_NAME":"com.fuelmate.native",
+		"BUILD_PATH":{
+			"OUTPUT_PATH":"C:\\Users\\Administrator\\WorkBuddy\\2026-11-16-13-07-33\\apps\\harmony-native\\build\\outputs\\default"
+		},
+		"SELECT_BUILD_MODE":""
+	},
+	"CertConfig":{}
+}

@@ -1,0 +1,39 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.fuelmate.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.fuelmate.app'
+        minSdk 24
+        targetSdk 34
+        versionCode 28
+        versionName '1.6.5'
+    }
+
+    // 必须先声明签名配置，buildTypes 才能引用
+    signingConfigs {
+        release {
+            storeFile file('../../signing/android-fueltmate.jks')
+            storePassword 'FuelMate@2026'
+            keyAlias 'fuelmate'
+            keyPassword 'FuelMate@2026'
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ''
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6821f">
+  <title>电耗管家</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="stylesheet" href="./css/app.css?v=2.20">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- 顶部栏 -->
+  <header class="app-header">
+    <div class="brand">⚡ 电耗管家</div>
+    <select v-if="vehicles.length" v-model="currentVehicleId" class="vehicle-select">
+      <option v-for="v in vehicles" :key="v.id" :value="v.id">{{ v.name }}</option>
+    </select>
+    <button v-else class="btn btn-sm btn-primary" @click="openVehicleForm()">＋ 添加车辆</button>
+  </header>
+
+  <!-- 导航：移动端固定底部，桌面端为头部下方水平标签 -->
+  <nav class="tabbar">
+    <button v-for="t in tabs" :key="t.key" :class="{active: tab===t.key}" @click="tab=t.key">
+      <span class="tab-ico">{{ t.icon }}</span>
+      <span>{{ t.label }}</span>
+    </button>
+  </nav>
+
+  <main class="app-main">
+
+    <!-- 空状态引导 -->
+    <div v-if="!vehicles.length" class="onboard">
+      <div class="card onboard-card">
+        <div class="onboard-emoji">🚗⚡</div>
+        <h2>欢迎使用电耗管家</h2>
+        <p>记录每次充电与养车费用，自动计算电耗、每公里成本，保养到期自动提醒。数据完全存储在你自己的 NAS 上。</p>
+        <button class="btn btn-primary block" @click="openVehicleForm()">＋ 添加我的车辆</button>
+        <button class="btn btn-ghost block" @click="seedDemo()">先看看示例数据</button>
+      </div>
+    </div>
+
+    <template v-else-if="currentVehicle">
+
+      <!-- ============ 首页 ============ -->
+      <section v-show="tab==='home'" class="view view-home">
+        <div class="hero">
+          <div class="hero-top">
+            <div>
+              <div class="hero-name">{{ currentVehicle.name }}
+                <span v-if="currentVehicle.plate" class="hero-plate">{{ currentVehicle.plate }}</span>
+              </div>
+              <div class="hero-sub" :title="currentVehicle.battery ? '电池 ' + fmt(currentVehicle.battery, 1) + ' kWh' : ''">{{ currentVehicle.model || '未设置车型' }}<template v-if="ov && ov.estimatedRange != null"> · <b class="range">续航 {{ fmt(ov.estimatedRange, 0) }} km</b></template><template v-else-if="currentVehicle.battery"> · {{ fmt(currentVehicle.battery, 1) }} kWh</template></div>
+            </div>
+          </div>
+          <div class="hero-main">
+            <div class="big">{{ fmt(ov && ov.avgConsumption, 3) }}<span class="unit"> kWh/km</span></div>
+            <div class="hero-sub">平均电耗 (kWh/km)<template v-if="ov && ov.lastConsumption!=null"> · 最近 {{ fmt(ov.lastConsumption, 3) }}</template></div>
+          </div>
+          <div class="hero-grid">
+            <div><b>{{ fmt(ov && ov.totalDistance, 0) }}</b><span>总里程(km)</span></div>
+            <div><b>{{ fmt(ov && ov.chargeCostPerKm, 2) }}</b><span>电费/km(元)</span></div>
+            <div><b>{{ fmt(ov && ov.lastPrice, 2) }}</b><span>最近电价(元/kWh)</span></div>
+            <div><b>{{ ov ? ov.chargeCount : 0 }}</b><span>充电次数</span></div>
+          </div>
+        </div>
+
+        <!-- 年度里程倒计时 -->
+        <annual-countdown v-if="annual && annual.limit" :annual="annual"></annual-countdown>
+
+        <!-- 保养提醒模块（含进度条） -->
+        <reminder-list :reminders="sortedReminders" @edit="editReminder" @add="openReminderForm()"></reminder-list>
+
+        <!-- 最近记录模块 -->
+        <recent-records :records="recentRecords"></recent-records>
+      </section>
+
+      <!-- ============ 充电 ============ -->
+      <section v-show="tab==='charge'" class="view view-charge">
+        <div class="stat-strip">
+          <div><b>{{ fmt(ov && ov.avgConsumption, 3) }}</b><span>平均电耗 kWh/km</span></div>
+          <div><b>{{ fmt(ov && ov.totalKwh, 1) }}</b><span>总充电量 kWh</span></div>
+          <div><b>{{ fmt(ov && ov.totalChargeCost, 0) }}</b><span>总电费 元</span></div>
+        </div>
+        <div class="card">
+          <div v-if="!charges.length" class="empty">暂无充电记录<br>点击右下角 Ａ 添加</div>
+          <div v-for="c in charges" :key="c.id" class="record tap" @click="editCharge(c)">
+            <div class="rec-ico">⚡</div>
+            <div class="rec-main">
+              <div class="rec-title">{{ c.date }} <span v-if="socText(c)" class="badge muted">{{ socText(c) }}</span></div>
+              <div class="rec-sub">{{ fmt(c.odometer, 0) }} km · {{ fmt(c.kwh, 2) }}kWh · ¥{{ fmt(c.price, 2) }}/kWh<span v-if="c.station"> · {{ c.station }}</span></div>
+            </div>
+            <div class="rec-right">
+              <div class="rec-amount">¥{{ fmt(c.total_cost, 2) }}</div>
+              <div v-if="c.consumption != null" class="cons">{{ fmt(c.consumption, 3) }} kWh/km</div>
+            </div>
+          </div>
+        </div>
+        <div class="tip" v-if="charges.length">💡 电耗按相邻两次充电之间的电量 ÷ 里程计算，无需充满</div>
+      </section>
+
+      <!-- ============ 费用 ============ -->
+      <section v-show="tab==='cost'" class="view view-cost">
+        <div class="stat-strip">
+          <div><b>{{ fmt(ov && ov.totalOtherCost, 0) }}</b><span>杂费合计 元</span></div>
+          <div><b>{{ fmt(ov && ov.totalCost, 0) }}</b><span>养车总支出 元</span></div>
+          <div><b>{{ fmt(ov && ov.allCostPerKm, 2) }}</b><span>综合每公里 元</span></div>
+        </div>
+        <div class="chips-row">
+          <div class="chips">
+            <button v-for="t in expenseFilterOptions" :key="t" class="chip" :class="{active: expenseFilter===t}" @click="expenseFilter=t">{{ t }}</button>
+          </div>
+          <button class="chip chip-manage" @click="openCategoryManager()">✎ 类型</button>
+        </div>
+        <div class="card">
+          <div v-if="!filteredExpenses.length" class="empty">暂无费用记录<br>点击右下角 Ａ 添加</div>
+          <div v-for="e in filteredExpenses" :key="e.id" class="record tap" @click="editExpense(e)">
+            <div class="rec-ico">{{ typeIcon(e.type) }}</div>
+            <div class="rec-main">
+              <div class="rec-title">{{ e.type }} <span class="rec-date">{{ e.date }}</span></div>
+              <div class="rec-sub"><template v-if="e.odometer">{{ fmt(e.odometer, 0) }} km · </template>{{ e.notes || '—' }}</div>
+            </div>
+            <div class="rec-amount">¥{{ fmt(e.amount, 2) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 统计 ============ -->
+      <section v-show="tab==='stats'" class="view view-stats">
+        <div class="stat-strip">
+          <div><b>{{ fmt(ov && ov.avgConsumption, 3) }}</b><span>平均电耗 kWh/km</span></div>
+          <div><b>{{ fmt(ov && ov.totalChargeCost, 0) }}</b><span>总电费 元</span></div>
+          <div><b>{{ fmt(ov && ov.totalOtherCost, 0) }}</b><span>杂费 元</span></div>
+        </div>
+
+        <div class="card" v-if="ov && ov.purchasePrice != null">
+          <div class="card-title">💰 持有成本</div>
+          <div class="own-grid">
+            <div><b>{{ fmt(ov.holdCostPerDay, 2) }}</b><span>元/天（车价÷{{ ov.holdDays }}天）</span></div>
+            <div><b>{{ fmt(ov.holdCostPerKm, 2) }}</b><span>元/km（车价÷里程）</span></div>
+            <div><b>{{ fmt(ov.purchasePrice, 0) }}</b><span>购车价格 元</span></div>
+            <div><b>{{ fmt(ov.holdDays, 0) }}</b><span>已持有 天</span></div>
+          </div>
+          <div class="own-total">
+            含购车总成本 <b>{{ fmt(ov.totalOwnershipCost, 0) }}</b> 元
+            <template v-if="ov.ownershipCostPerKm != null"> · 综合每公里 <b>{{ fmt(ov.ownershipCostPerKm, 2) }}</b> 元</template>
+            <span class="own-note">（购车 + 电费 + 杂费）</span>
+          </div>
+        </div>
+        <div class="card" v-else>
+          <div class="card-title">💰 持有成本</div>
+          <div class="empty">在「我的 → 车辆编辑」里填写购车价格与购车日期后可查看</div>
+        </div>
+
+        <div class="card" v-if="hasSegments">
+          <div class="card-title">📈 电耗趋势</div>
+          <div class="chart-box"><canvas ref="consChart"></canvas></div>
+        </div>
+        <div class="card" v-else>
+          <div class="card-title">📈 电耗趋势</div>
+          <div class="empty">需要至少两次充电记录才能计算电耗</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📊 近 12 个月费用</div>
+          <div class="chart-box"><canvas ref="monthChart"></canvas></div>
+        </div>
+
+        <div class="card" v-if="stats && stats.expenseByType.length">
+          <div class="card-title">🧾 费用构成</div>
+          <div class="chart-box"><canvas ref="typeChart"></canvas></div>
+        </div>
+
+        <div class="tip">💡 电费 = 充电金额；杂费 = 保养/保险/停车等费用；电耗 = 相邻两次充电之间的电量 ÷ 里程（kWh/km）</div>
+      </section>
+
+      <!-- ============ 我的 ============ -->
+      <section v-show="tab==='me'" class="view view-me">
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🚗 车辆管理</span>
+            <button class="btn btn-sm btn-ghost" @click="openVehicleForm()">＋ 添加</button>
+          </div>
+          <div v-for="v in vehicles" :key="v.id" class="record tap" @click="editVehicle(v)">
+            <div class="rec-ico">🚗</div>
+            <div class="rec-main">
+              <div class="rec-title">{{ v.name }} <span v-if="v.id===currentVehicleId" class="badge ok">当前</span></div>
+              <div class="rec-sub">{{ [v.model, v.plate].filter(Boolean).join(' · ') || '未设置车型' }}</div>
+            </div>
+            <div class="rec-side">{{ v.charge_count }} 次充电 · {{ v.expense_count }} 笔费用</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">⏰ 保养提醒</span>
+            <button class="btn btn-sm btn-ghost" @click="openReminderForm()">＋ 添加</button>
+          </div>
+          <div v-if="!reminders.length" class="empty">暂无提醒，可添加如「年度保养 每 10000km」</div>
+          <div v-for="r in reminders" :key="r.id" class="record tap" @click="editReminder(r)">
+            <div class="rec-main">
+              <div class="rec-title">{{ r.title }} <span class="badge" :class="r.status">{{ statusText(r) }}</span></div>
+              <div class="rec-sub">{{ reminderRuleText(r) }}</div>
+              <div class="rec-sub" v-if="reminderNextDue(r)">{{ reminderNextDue(r) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📤 数据导出</div>
+          <div class="btn-row">
+            <a class="btn btn-ghost" :href="exportUrl('charges.csv')" target="_blank">导出充电记录</a>
+            <a class="btn btn-ghost" :href="exportUrl('expenses.csv')" target="_blank">导出费用记录</a>
+          </div>
+        </div>
+
+        <div class="card about">
+          <div class="card-title">ℹ️ 关于</div>
+          <p>电耗管家 v2.0 · 自部署电动车充电/电耗与养车费用记录应用。数据以 SQLite 存储在服务端 data 目录，请定期备份该目录。</p>
+          <p>自适应手机 / 平板 / 桌面浏览器，可通过浏览器「添加到主屏幕」作为 App 使用。</p>
+        </div>
+      </section>
+    </template>
+  </main>
+
+  <!-- 悬浮按钮 -->
+  <button class="fab" v-if="currentVehicle && (tab==='home' || tab==='charge' || tab==='cost')"
+    @click="tab==='cost' ? openExpenseForm() : openChargeForm()">＋</button>
+
+  <!-- ============ 车辆表单 ============ -->
+  <div class="modal-mask" v-if="modal==='vehicle'">
+    <div class="modal-sheet">
+      <div class="modal-title">{{ editingId ? '编辑车辆' : '添加车辆' }}</div>
+      <div class="field"><label>车辆昵称 *</label><input v-model.trim="vehicleForm.name" placeholder="如：我的海豚" maxlength="50"></div>
+      <div class="field"><label>车牌号</label><input v-model.trim="vehicleForm.plate" placeholder="京A·12345" maxlength="20"></div>
+      <div class="field"><label>车型</label><input v-model.trim="vehicleForm.model" placeholder="如：比亚迪 海豚 420km" maxlength="100"></div>
+      <div class="field"><label>电池容量(kWh，选填)</label><input type="number" inputmode="decimal" step="0.1" v-model.number="vehicleForm.battery" placeholder="如 44.9"></div>
+      <div class="field"><label>每年限定里程(km，选填)</label><input type="number" inputmode="decimal" v-model.number="vehicleForm.annual_km_limit" placeholder="如 30000，首页显示年度额度进度"></div>
+      <div class="grid2">
+        <div class="field"><label>购车价格(元，选填)</label><input type="number" inputmode="decimal" step="0.01" v-model.number="vehicleForm.purchase_price" placeholder="如 129800"></div>
+        <div class="field"><label>购车日期(选填)</label><input type="date" v-model="vehicleForm.purchase_date"></div>
+      </div>
+      <div class="hint" v-if="vehicleForm.purchase_price && vehicleForm.purchase_date">持有成本 = 购车价 ÷ 已持有天数，统计页可查看</div>
+      <div class="btn-row form-actions">
+        <button class="btn btn-danger-ghost" v-if="editingId" @click="deleteVehicle(editingId)">删除车辆</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" @click="closeModal()">取消</button>
+        <button class="btn btn-primary" @click="saveVehicle()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 充电表单 ============ -->
+  <div class="modal-mask" v-if="modal==='charge'">
+    <div class="modal-sheet">
+      <div class="modal-title">{{ editingId ? '编辑充电记录' : '添加充电记录' }}</div>
+      <div class="grid2">
+        <div class="field"><label>日期 *</label><input type="date" v-model="chargeForm.date"></div>
+        <div class="field"><label>里程(km) *</label><input type="number" inputmode="decimal" v-model.number="chargeForm.odometer" placeholder="如 18000"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>充电量(kWh) *</label><input type="number" inputmode="decimal" step="0.01" v-model.number="chargeForm.kwh" placeholder="如 42.5"></div>
+        <div class="field"><label>单价(元/kWh) *</label><input type="number" inputmode="decimal" step="0.01" v-model.number="chargeForm.price" placeholder="如 1.05"></div>
+      </div>
+      <div class="field"><label>金额(元)</label><input type="number" inputmode="decimal" step="0.01" v-model.number="chargeForm.total_cost" placeholder="留空则按 量×单价 自动计算"></div>
+      <div class="grid2">
+        <div class="field"><label>充电前 SOC(%)</label><input type="number" inputmode="numeric" min="0" max="100" v-model.number="chargeForm.soc_before" placeholder="如 20"></div>
+        <div class="field"><label>充电后 SOC(%)</label><input type="number" inputmode="numeric" min="0" max="100" v-model.number="chargeForm.soc_after" placeholder="如 90"></div>
+      </div>
+      <div class="hint soc-hint">SOC 选填，仅作记录参考；电耗按相邻两次充电计算</div>
+      <div class="field"><label>充电地点</label><input v-model.trim="chargeForm.station" placeholder="如：家充桩 / 特来电·万达站" maxlength="50"></div>
+      <div class="field"><label>备注</label><input v-model.trim="chargeForm.notes" maxlength="200"></div>
+      <div class="btn-row form-actions">
+        <button class="btn btn-danger-ghost" v-if="editingId" @click="deleteCharge(editingId)">删除</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" @click="closeModal()">取消</button>
+        <button class="btn btn-primary" @click="saveCharge()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 费用表单 ============ -->
+  <div class="modal-mask" v-if="modal==='expense'">
+    <div class="modal-sheet">
+      <div class="modal-title">{{ editingId ? '编辑费用' : '添加费用' }}</div>
+      <div class="field"><label>费用类型 *</label>
+        <div class="type-grid">
+          <button v-for="t in expenseTypes" :key="t" type="button" class="type-btn" :class="{active: expenseForm.type===t}" @click="expenseForm.type=t">{{ typeIcon(t) }} {{ t }}</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>日期 *</label><input type="date" v-model="expenseForm.date"></div>
+        <div class="field"><label>金额(元) *</label><input type="number" inputmode="decimal" step="0.01" v-model.number="expenseForm.amount" placeholder="0.00"></div>
+      </div>
+      <div class="field"><label>当时里程(km)</label><input type="number" inputmode="decimal" v-model.number="expenseForm.odometer" :placeholder="expenseForm.type==='保养' && expenseForm.sync_on ? '建议填写本次保养时的里程' : '选填，用于保养提醒'"></div>
+
+      <!-- 保养费用：同步保养项目的里程与日期 -->
+      <div class="sync-block" v-if="!editingId && expenseForm.type==='保养' && reminders.length">
+        <label class="check">
+          <input type="checkbox" v-model="expenseForm.sync_on">
+          <span>同步保养里程与日期</span>
+        </label>
+        <template v-if="expenseForm.sync_on">
+          <div class="sync-targets">
+            <label v-for="r in reminders" :key="r.id" class="check sub">
+              <input type="checkbox" v-model="expenseForm.sync_ids" :value="r.id">
+              <span>{{ r.title }}（{{ r.rule_type==='date' ? '日期' : (r.rule_type==='mileage' ? '里程' : '里程+日期') }}）</span>
+            </label>
+          </div>
+          <div class="hint">里程取本笔费用里程（未填则取当前里程），日期取本笔费用日期</div>
+        </template>
+      </div>
+      <div class="field"><label>备注</label><input v-model.trim="expenseForm.notes" placeholder="如：常规检查+空调滤芯" maxlength="200"></div>
+      <div class="btn-row form-actions">
+        <button class="btn btn-danger-ghost" v-if="editingId" @click="deleteExpense(editingId)">删除</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" @click="closeModal()">取消</button>
+        <button class="btn btn-primary" @click="saveExpense()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 费用类型管理 ============ -->
+  <div class="modal-mask" v-if="modal==='category'">
+    <div class="modal-sheet">
+      <div class="modal-title">管理费用类型</div>
+      <div class="field">
+        <label>新增类型</label>
+        <div class="inline-add">
+          <input v-model.trim="newCategoryName" placeholder="如：充电会员费" maxlength="20" @keyup.enter="addCategory()">
+          <button class="btn btn-primary btn-sm" @click="addCategory()">添加</button>
+        </div>
+      </div>
+      <div class="cat-list">
+        <div v-for="c in categories" :key="c.id" class="cat-row">
+          <template v-if="editingCategoryId===c.id">
+            <input class="cat-input" v-model.trim="editingCategoryName" maxlength="20" @keyup.enter="saveCategoryName(c)">
+            <button class="btn btn-sm btn-primary" @click="saveCategoryName(c)">保存</button>
+            <button class="btn btn-sm btn-ghost" @click="editingCategoryId=null">取消</button>
+          </template>
+          <template v-else>
+            <div class="cat-name">{{ typeIcon(c.name) }} {{ c.name }}<span class="cat-usage">{{ c.usage_count }} 笔</span></div>
+            <div class="cat-ops">
+              <button class="btn btn-sm btn-ghost" v-if="c.name!=='其他'" @click="startRenameCategory(c)">改名</button>
+              <button class="btn btn-sm btn-danger-ghost" v-if="c.name!=='其他'" @click="deleteCategory(c)">删除</button>
+              <span v-else class="cat-lock">系统类目</span>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="tip">💡 改名会同步更新已记录的该类型费用；删除类型时，其记录自动归入「其他」</div>
+      <div class="btn-row form-actions">
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" @click="closeModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 提醒表单 ============ -->
+  <div class="modal-mask" v-if="modal==='reminder'">
+    <div class="modal-sheet">
+      <div class="modal-title">{{ editingId ? '编辑提醒' : '添加提醒' }}</div>
+      <div class="field"><label>提醒项目 *</label><input v-model.trim="reminderForm.title" placeholder="如：年度保养" maxlength="50"></div>
+      <div class="field"><label>提醒规则</label>
+        <select v-model="reminderForm.rule_type">
+          <option value="mileage">按里程</option>
+          <option value="date">按时间</option>
+          <option value="both">里程 + 时间（先到为准）</option>
+        </select>
+      </div>
+      <div class="grid2" v-if="reminderForm.rule_type!=='date'">
+        <div class="field"><label>间隔里程(km) *</label><input type="number" inputmode="decimal" v-model.number="reminderForm.interval_km" placeholder="如 10000"></div>
+        <div class="field"><label>上次保养里程(km) *</label><input type="number" inputmode="decimal" v-model.number="reminderForm.base_odometer"></div>
+      </div>
+      <div class="grid2" v-if="reminderForm.rule_type!=='mileage'">
+        <div class="field"><label>间隔天数 *</label><input type="number" inputmode="numeric" v-model.number="reminderForm.interval_days" placeholder="如 365"></div>
+        <div class="field"><label>上次保养日期 *</label><input type="date" v-model="reminderForm.base_date"></div>
+      </div>
+      <div class="next-preview" v-if="reminderPreview">
+        <span>下次保养</span><b>{{ reminderPreview }}</b>
+      </div>
+      <div class="field"><label>备注</label><input v-model.trim="reminderForm.notes" maxlength="200"></div>
+      <div class="btn-row form-actions">
+        <button class="btn btn-danger-ghost" v-if="editingId" @click="deleteReminder(editingId)">删除</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" @click="closeModal()">取消</button>
+        <button class="btn btn-primary" @click="saveReminder()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" v-if="toast" :class="toast.type">{{ toast.msg }}</div>
+
+
+</div>
+
+<script src="./js/boot.js"></script>
+<script src="./vendor/vue.global.prod.js"></script>
+<script src="./vendor/chart.umd.js"></script>
+<script src="./js/components.js?v=2.20"></script>
+<script src="./js/app.js?v=2.20"></script>
+</body>
+</html>
