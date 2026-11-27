@@ -4,6 +4,7 @@ struct MeView: View {
     @EnvironmentObject private var store: Store
     @State private var showVehicleForm = false
     @State private var editing: Vehicle? = nil
+    @State private var newType = ""
 
     var body: some View {
         NavigationStack {
@@ -74,6 +75,42 @@ struct MeView: View {
                     }
                 } header: {
                     Text("持有成本")
+                }
+
+                Section {
+                    ForEach(store.expenseTypes, id: \.self) { t in
+                        HStack {
+                            Text(t).font(.subheadline)
+                            Spacer()
+                            if store.expenseTypes.count > 1 {
+                                Button {
+                                    store.removeExpenseType(t)
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.red.opacity(0.75))
+                            }
+                        }
+                    }
+                    HStack {
+                        TextField("新增项目，如 洗车", text: $newType)
+                        Button("添加") {
+                            store.addExpenseType(newType)
+                            newType = ""
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Theme.green)
+                        .disabled(newType.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                } header: {
+                    HStack {
+                        Text("费用项目")
+                        Spacer()
+                        Text("\(store.expenseTypes.count) 项 · 与提醒共用")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {

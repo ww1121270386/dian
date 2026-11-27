@@ -3,6 +3,7 @@ import SwiftUI
 struct ExpensesView: View {
     @EnvironmentObject private var store: Store
     @State private var showForm = false
+    @State private var editing: Expense? = nil
 
     var body: some View {
         NavigationStack {
@@ -40,20 +41,32 @@ struct ExpensesView: View {
                                 Spacer()
                                 Text("¥" + Calc.num(e.amount, 2)).font(.subheadline).fontWeight(.medium)
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture { editing = e }
                         }
                         .onDelete { idx in
                             for i in idx { store.deleteExpense(store.expenses[i].id) }
                         }
                     }
                 } header: {
-                    Text("费用明细")
+                    HStack {
+                        Text("费用明细")
+                        Spacer()
+                        Text("点击条目可编辑").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
             }
+            .sheet(item: $editing) { e in ExpenseFormView(editing: e) }
             .navigationTitle("费用")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showForm = true } label: { Image(systemName: "plus.circle.fill") }
+                    Button {
+                        editing = nil
+                        showForm = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
                 }
             }
             .sheet(isPresented: $showForm) { ExpenseFormView() }

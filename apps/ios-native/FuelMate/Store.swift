@@ -27,6 +27,7 @@ final class Store: ObservableObject {
             if let arr = obj["charges"] as? [[String: Any]] { d.charges = Store.decode(arr) }
             if let arr = obj["expenses"] as? [[String: Any]] { d.expenses = Store.decode(arr) }
             if let arr = obj["reminders"] as? [[String: Any]] { d.reminders = Store.decode(arr) }
+            d.expenseTypes = obj["expenseTypes"] as? [String]
             d.currentVehicleId = obj["currentVehicleId"] as? Int ?? 0
             d.seq = obj["seq"] as? Int ?? 0
             data = d
@@ -136,6 +137,15 @@ final class Store: ObservableObject {
         persist()
     }
 
+    func updateCharge(_ c: Charge) {
+        if let i = data.charges.firstIndex(where: { $0.id == c.id }) {
+            data.charges[i] = c
+        } else {
+            data.charges.append(c)
+        }
+        persist()
+    }
+
     // MARK: - 费用
 
     func addExpense(type: String, date: String, amount: Double, notes: String) {
@@ -150,15 +160,79 @@ final class Store: ObservableObject {
         persist()
     }
 
+    func updateExpense(_ e: Expense) {
+        if let i = data.expenses.firstIndex(where: { $0.id == e.id }) {
+            data.expenses[i] = e
+        } else {
+            data.expenses.append(e)
+        }
+        persist()
+    }
+
+    // MARK: - 费用项目（可自定义）
+
+    static let defaultTypes = ["保养", "保险", "停车", "维修", "充电服务费", "其他"]
+
+    var expenseTypes: [String] {
+        if let list = data.expenseTypes, !list.isEmpty { return list }
+        return Store.defaultTypes
+    }
+
+    func addExpenseType(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, !expenseTypes.contains(n) else { return }
+        var list = expenseTypes
+        list.append(n)
+        data.expenseTypes = list
+        persist()
+    }
+
+    func removeExpenseType(_ name: String) {
+        var list = expenseTypes
+        guard list.count > 1 else { return }
+        list.removeAll { $0 == name }
+        data.expenseTypes = list
+        persist()
+    }
+
     // MARK: - 保养
 
     func addReminder(title: String, ruleType: String, intervalKm: Double,
-                     baseOdometer: Double, intervalDays: Int, baseDate: String) {
+                     baseOdometer: Double, intervalDays: Int, baseDate: String,
+                     expenseType: String = "") {
         let r = Reminder(id: nextId(), vehicleId: currentVehicleId, title: title,
                          ruleType: ruleType, intervalKm: intervalKm,
-                         baseOdometer: baseOdometer, intervalDays: intervalDays, baseDate: baseDate)
+                         baseOdometer: baseOdometer, intervalDays: intervalDays, baseDate: baseDate,
+                         expenseType: expenseType.isEmpty ? nil : expenseType)
         data.reminders.append(r)
         persist()
+    }
+
+    func updateReminder(_ r: Reminder) {
+        if let i = data.reminders.firstIndex(where: { $0.id == r.id }) {
+            data.reminders[i] = r
+        } else {
+            data.reminders.append(r)
+        }
+        persist()
+    }
+
+    func newId() -> Int { nextId() }
+
+    /// 记账时把提醒基准推进到本次（与鸿蒙一致的联动口径）
+    func applyReminderFromExpense(id: Int, odometer: Double, date: String) {
+        guard let i = data.reminders.firstIndex(where: { $0.id == id }) else { return }
+        var r = data.reminders[i]
+        if r.ruleType != "date", odometer > 0 { r.baseOdometer = odometer }
+        if r.ruleType != "mileage" { r.baseDate = date }
+        data.reminders[i] = r
+        persist()
+    }
+
+    /// 按费用类型找已关联的提醒（无则 nil）
+    func reminderLinked(to type: String) -> Reminder? {
+        guard !type.isEmpty else { return nil }
+        return reminders.first { ($0.expenseType ?? "") == type }
     }
 
     func completeReminder(_ r: Reminder) {

@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var store: Store
     @State private var showReminderForm = false
+    @State private var editingReminder: Reminder? = nil
 
     private var o: Overview { store.overview }
     private var a: AnnualInfo { store.annual }
@@ -22,6 +23,9 @@ struct HomeView: View {
                 .padding(14)
             }
             .background(Theme.bg)
+            .sheet(item: $editingReminder) { r in
+                ReminderFormView(editing: r)
+            }
             .navigationTitle("电耗管家")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showReminderForm) {
@@ -131,10 +135,13 @@ struct HomeView: View {
 
     private var reminderCard: some View {
         CardBox {
-            SectionTitle(text: "⏰ 保养提醒", trailing: "＋ 添加") { showReminderForm = true }
+            SectionTitle(text: "⏰ 提醒",
+                         trailing: store.reminders.isEmpty ? "＋ 添加" : "\(store.reminders.count) 项 · 点击可编辑") {
+                showReminderForm = true
+            }
 
             if store.reminders.isEmpty {
-                Text("暂无保养提醒").font(.caption).foregroundStyle(.secondary)
+                Text("暂无提醒").font(.caption).foregroundStyle(.secondary)
             } else {
                 ForEach(store.reminders) { r in
                     let st = Calc.reminderState(r, currentOdo: o.lastOdometer)
@@ -147,14 +154,36 @@ struct HomeView: View {
                                 .foregroundStyle(st.status == "expired" ? Theme.danger : (st.status == "warn" ? Theme.warn : Theme.green))
                         }
                         Text(line(r, st)).font(.caption2).foregroundStyle(.secondary)
-                        if r.ruleType != "date" {
-                            ProgressView(value: Double(st.kmPct), total: 100)
-                                .tint(st.kmPct >= 80 ? Theme.danger : Theme.green)
+                        if r.ruleType != "date", r.intervalKm > 0 {
+                            barRow("里程", st.kmPct, st.kmPct >= 80 ? Theme.danger : Theme.green)
+                        }
+                        if r.ruleType != "mileage", r.intervalDays > 0 {
+                            barRow("时间", st.daysPct, st.daysPct >= 80 ? Theme.danger : Color.blue)
                         }
                     }
                     .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture { editingReminder = r }
+                    if store.reminders.last?.id != r.id {
+                        Divider().padding(.vertical, 2)
+                    }
                 }
             }
+        }
+    }
+
+    private func barRow(_ label: String, _ pct: Int, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.caption2).foregroundStyle(.secondary).frame(width: 26, alignment: .leading)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.black.opacity(0.06))
+                    Capsule().fill(color)
+                        .frame(width: max(4, geo.size.width * CGFloat(min(100, max(0, pct))) / 100))
+                }
+            }
+            .frame(height: 6)
+            Text("\(pct)%").font(.caption2).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
         }
     }
 

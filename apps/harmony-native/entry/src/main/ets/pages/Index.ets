@@ -10,6 +10,8 @@ import {
   fmtNum,
   Overview,
   overview,
+  Seg,
+  segments,
   Ownership,
   ownership,
   Reminder,
@@ -61,6 +63,9 @@ struct Index {
   @State cEditingId: number = 0;
   @State expenseTypes: string[] = ['保养', '保险', '停车', '维修', '其他'];
   @State fabPressed: boolean = false;
+
+  private ctxSettings: RenderingContextSettings = new RenderingContextSettings(true);
+  private trendCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.ctxSettings);
   @State newTypeName: string = '';
   @State rEditingId: number = 0;
 
@@ -128,6 +133,107 @@ struct Index {
     this.charges = await repo.charges(this.currentId);
     this.expenses = await repo.expenses(this.currentId);
     this.reminders = await repo.reminders(this.currentId);
+    setTimeout(() => { this.drawTrend(); }, 220);
+  }
+
+  /** 电耗趋势折线图（相邻两次充电） */
+  private drawTrend(): void {
+    const segs: Seg[] = segments(this.charges);
+    const w: number = this.trendCtx.width;
+    const h: number = this.trendCtx.height;
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    this.trendCtx.clearRect(0, 0, w, h);
+    if (segs.length === 0) {
+      return;
+    }
+
+    const padL: number = 38;
+    const padR: number = 12;
+    const padT: number = 14;
+    const padB: number = 18;
+    const innerW: number = w - padL - padR;
+    const innerH: number = h - padT - padB;
+
+    let maxV: number = 0;
+    let minV: number = 999;
+    for (const s of segs) {
+      if (s.consumption > maxV) {
+        maxV = s.consumption;
+      }
+      if (s.consumption < minV) {
+        minV = s.consumption;
+      }
+    }
+    const pad: number = (maxV - minV) < 0.02 ? 0.012 : (maxV - minV) * 0.3;
+    maxV = maxV + pad;
+    minV = Math.max(0, minV - pad);
+    const span: number = maxV - minV <= 0 ? 1 : maxV - minV;
+
+    // 网格
+    this.trendCtx.strokeStyle = '#EDEFF2';
+    this.trendCtx.lineWidth = 1;
+    for (let i = 0; i <= 2; i++) {
+      const y: number = padT + innerH * i / 2;
+      this.trendCtx.beginPath();
+      this.trendCtx.moveTo(padL, y);
+      this.trendCtx.lineTo(w - padR, y);
+      this.trendCtx.stroke();
+    }
+
+    // 坐标标注
+    this.trendCtx.fillStyle = '#9AA0A8';
+    this.trendCtx.font = '10vp sans-serif';
+    this.trendCtx.fillText(fmtNum(maxV, 3), 2, padT + 3);
+    this.trendCtx.fillText(fmtNum(minV, 3), 2, padT + innerH + 3);
+
+    // 折线 + 数据点
+    this.trendCtx.strokeStyle = '#1CAB5C';
+    this.trendCtx.lineWidth = 2.5;
+    this.trendCtx.beginPath();
+    for (let i = 0; i < segs.length; i++) {
+      const x: number = padL + (segs.length === 1 ? innerW / 2 : innerW * i / (segs.length - 1));
+      const y: number = padT + innerH * (1 - (segs[i].consumption - minV) / span);
+      if (i === 0) {
+        this.trendCtx.moveTo(x, y);
+      } else {
+        this.trendCtx.lineTo(x, y);
+      }
+    }
+    this.trendCtx.stroke();
+
+    this.trendCtx.fillStyle = '#1CAB5C';
+    for (let i = 0; i < segs.length; i++) {
+      const x: number = padL + (segs.length === 1 ? innerW / 2 : innerW * i / (segs.length - 1));
+      const y: number = padT + innerH * (1 - (segs[i].consumption - minV) / span);
+      this.trendCtx.beginPath();
+      this.trendCtx.arc(x, y, 3, 0, Math.PI * 2);
+      this.trendCtx.fill();
+    }
+  }
+
+  @Builder
+  trendChart() {
+    Column({ space: 8 }) {
+      Row() {
+        Text('电耗趋势').fontSize(13).fontWeight(FontWeight.Medium)
+        Blank()
+        Text('kWh/km · 相邻两次充电').fontSize(10.5).fontColor(TEXT2)
+      }
+      .width('100%')
+
+      Canvas(this.trendCtx)
+        .width('100%')
+        .height(134)
+        .backgroundColor('#FAFBFC')
+        .borderRadius(12)
+        .onReady(() => { this.drawTrend(); })
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor(Color.White)
+    .borderRadius(16)
   }
 
   private currentVehicle(): Vehicle {
@@ -799,6 +905,10 @@ struct Index {
           .fontColor(TEXT2)
       }
       .width('100%')
+
+      if (segments(this.charges).length > 0) {
+        this.trendChart()
+      }
 
       if (this.charges.length === 0) {
         Text('还没有充电记录，点右上角记录第一笔').fontSize(12.5).fontColor(TEXT2).width('100%')

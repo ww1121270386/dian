@@ -44,6 +44,7 @@ struct Reminder: Identifiable, Codable, Equatable {
     var baseOdometer: Double = 0
     var intervalDays: Int = 0
     var baseDate: String = ""
+    var expenseType: String? = nil   // 关联的费用类型，nil/空=不关联
 }
 
 // MARK: - 计算结果
@@ -107,4 +108,5 @@ struct AppData: Codable {
     var reminders: [Reminder] = []
     var currentVehicleId: Int = 0
     var seq: Int = 0
+    var expenseTypes: [String]? = nil
 }
